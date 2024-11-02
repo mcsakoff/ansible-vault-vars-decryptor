@@ -11,6 +11,7 @@ Quickly decrypt and print out ansible vault variables from within a file.
   - > "While decrypt could be used to decrypt a string, it would have to appear as the 'whole document' to work, which you can do with editor that let you pass a 'selection' as the input to external calls, which vim can do (I'm not sure the extension does, but could be modified to do so)." (https://github.com/ansible/ansible/issues/78124#issuecomment-1167348692)
     
     The above is a faff. Hence this tool makes quickly viewing the decrypted values easier for me.
+- https://newbit.ch/ansible-vault-encrypted-variables/
 
 ## Download
 
