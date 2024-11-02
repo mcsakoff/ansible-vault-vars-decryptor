@@ -1,0 +1,12 @@
+{
+  "plugins": [
+    "git-tag",
+    "conventional-commits",
+    "first-time-contributor",
+    "released"
+  ],
+  "owner": "chrisjsimpson",
+  "repo": "ansible-vault-vars-decryptor",
+  "name": "chrisjsimpson",
+  "email": "oss@karmacomputing.co.uk"
+}
