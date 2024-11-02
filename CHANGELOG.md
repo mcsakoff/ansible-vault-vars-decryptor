@@ -1,3 +1,15 @@
+# v0.0.9 (Sat Nov 02 2024)
+
+#### ⚠️ Pushed to `main`
+
+- Update ci.yml match reference action https://github.com/houseabsolute/precious/blob/master/.github/workflows/ci.yml ([@chrisjsimpson](https://github.com/chrisjsimpson))
+
+#### Authors: 1
+
+- [@chrisjsimpson](https://github.com/chrisjsimpson)
+
+---
+
 # v0.0.8 (Sat Nov 02 2024)
 
 #### ⚠️ Pushed to `main`
