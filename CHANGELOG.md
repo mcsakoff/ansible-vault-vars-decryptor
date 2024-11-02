@@ -1,3 +1,15 @@
+# v0.0.8 (Sat Nov 02 2024)
+
+#### ⚠️ Pushed to `main`
+
+- Update README.md ([@chrisjsimpson](https://github.com/chrisjsimpson))
+
+#### Authors: 1
+
+- [@chrisjsimpson](https://github.com/chrisjsimpson)
+
+---
+
 # v0.0.7 (Sat Nov 02 2024)
 
 #### ⚠️ Pushed to `main`
