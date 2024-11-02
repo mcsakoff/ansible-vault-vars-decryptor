@@ -1,8 +1,13 @@
 name: Build
 on:
   push:
+    branches:
+      - "**"
   pull_request:
   workflow_dispatch:
+env:
+  RUST_BACKTRACE: 1
+  GITHUB_TOKEN: ${{ github.token }}
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
