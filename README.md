@@ -12,6 +12,10 @@ Quickly decrypt and print out ansible vault variables from within a file.
     
     The above is a faff. Hence this tool makes quickly viewing the decrypted values easier for me.
 
+## Download
+
+See https://github.com/chrisjsimpson/ansible-vault-vars-decryptor/actions/workflows/ci.yml artifacts and download & extract the binary for your os.
+TODO: Tie release from auto rc to ci.yml `build` job.
 
 ## Usage:
 
