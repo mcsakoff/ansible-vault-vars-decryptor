@@ -2,7 +2,6 @@
   "plugins": [
     "git-tag",
     "conventional-commits",
-    "first-time-contributor",
     "released"
   ],
   "owner": "chrisjsimpson",
