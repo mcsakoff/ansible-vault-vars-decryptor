@@ -2,7 +2,12 @@
 
 Quickly decrypt and print out ansible vault variables from within a file.
 
-- Assumes you have `ansible-vault` installed (in your path/in an activated virtual environment)
+## Features
+
+- Native Rust implementation - no external dependencies required
+- Fast and efficient decryption
+- Supports both environment variables and password files for vault passwords
+- Handles inline vault variables within YAML files
 
 ## Keywords:
 
@@ -12,11 +17,6 @@ Quickly decrypt and print out ansible vault variables from within a file.
     
     The above is a faff. Hence this tool makes quickly viewing the decrypted values easier for me.
 - https://newbit.ch/ansible-vault-encrypted-variables/
-
-## ⚠️ Requirements
-
-**Important**: This tool requires `ansible-vault` to be installed and available in your PATH. Please ensure you have Ansible installed before using this tool.
-
 
 ## Download
 
@@ -97,14 +97,6 @@ The binary will be available at `target/release/ansible-decryptor`
 
 To run the tests, you'll need:
 1. Rust toolchain (cargo, rustc)
-2. Python and ansible-vault:
-   ```bash
-   # Install ansible-vault (Ubuntu/Debian)
-   sudo apt-get install ansible
-
-   # Or with pip
-   pip install ansible-core
-   ```
 
 ## Testing
 

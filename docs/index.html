@@ -42,6 +42,27 @@
             bottom: 0;
             width: 100%;
         }
+        .features {
+            background-color: #e8f4f8;
+            padding: 1em;
+            margin: 1em 0;
+            border-radius: 5px;
+        }
+        .features ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .features li {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+            position: relative;
+        }
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -51,13 +72,20 @@
     </div>
     <div class="content">
         <h2>Welcome to Ansible Decryptor</h2>
-        <p>Ansible Decryptor is a powerful tool designed to help you decrypt Ansible vault files with ease. It's perfect for developers and system administrators who need a straightforward way to access encrypted data.</p>
+        <p>Ansible Decryptor is a powerful tool designed to help you decrypt Ansible vault files with ease. Built with Rust for maximum performance and reliability.</p>
+        
+        <div class="features">
+            <h3>Features</h3>
+            <ul>
+                <li>Native Rust implementation - no external dependencies required</li>
+                <li>Fast and efficient decryption</li>
+                <li>Supports both environment variables and password files</li>
+                <li>Handles inline vault variables within YAML files</li>
+            </ul>
+        </div>
+
         <h3>Download Instructions</h3>
         <div class="download">
-            <div style="background-color: #fff3cd; color: #856404; padding: 1em; margin: 1em 0; border-radius: 5px; border: 1px solid #ffeeba;">
-                <strong>⚠️ Important:</strong> This tool requires <code>ansible-vault</code> to be installed and available in your PATH. 
-                Please ensure you have Ansible installed before using this tool.
-            </div>
             <p>To download the latest version of Ansible Decryptor, visit our <a href="https://github.com/chrisjsimpson/ansible-vault-vars-decryptor/releases/latest">GitHub Releases</a> page and select the appropriate binary for your operating system.</p>
             <ul>
                 <li><a href="https://github.com/chrisjsimpson/ansible-vault-vars-decryptor/releases/latest/download/ansible-decryptor-Linux-x86_64.tar.gz">Download for Linux</a></li>
