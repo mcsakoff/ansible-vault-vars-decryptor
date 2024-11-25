@@ -7,11 +7,13 @@ use tempfile;
 
 fn get_vault_password() -> Result<String, String> {
     // First try environment variable
+    println!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD.");
     if let Ok(password) = env::var("ANSIBLE_VAULT_PASSWORD") {
         return Ok(password);
     }
 
     // Then try password file from environment variable
+    println!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD_FILE.");
     if let Ok(password_file) = env::var("ANSIBLE_VAULT_PASSWORD_FILE") {
         return fs::read_to_string(password_file)
             .map(|s| s.trim().to_string())
@@ -19,6 +21,7 @@ fn get_vault_password() -> Result<String, String> {
     }
 
     // Finally try default password file location
+    println!("Attempting to get vault password from default location ~/.vault_pass.");
     let home = env::var("HOME").map_err(|_| "HOME environment variable not set".to_string())?;
     let default_password_file = Path::new(&home).join(".vault_pass");
     
