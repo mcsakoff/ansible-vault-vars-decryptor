@@ -1,6 +1,8 @@
-name: Build
+name: Build and release
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -12,7 +14,41 @@ concurrency:
   cancel-in-progress: true
   
 jobs:
+  tag-new-version:
+    name: Create new version tag
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      new_version: ${{ steps.create_tag.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=${latest_tag}" >> $GITHUB_OUTPUT
+          
+      - name: Create new version tag
+        id: create_tag
+        run: |
+          latest_tag="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          major=$(echo $latest_tag | cut -d. -f1 | tr -d 'v')
+          minor=$(echo $latest_tag | cut -d. -f2)
+          patch=$(echo $latest_tag | cut -d. -f3)
+          new_patch=$((patch + 1))
+          new_version="v$major.$minor.$new_patch"
+          echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "${new_version}" -m "Release ${new_version}"
+          git push origin "${new_version}"
+
   release:
+    needs: [tag-new-version]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     name: Release - ${{ matrix.platform.os-name }}
     strategy:
       matrix:
@@ -93,9 +129,9 @@ jobs:
             ansible-decryptor-${{ matrix.platform.os-name }}.sha256
 
   create-release:
-    needs: release
+    needs: [release, tag-new-version]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v3
@@ -103,6 +139,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ github.ref == 'refs/heads/main' && needs.tag-new-version.outputs.new_version || github.ref_name }}
           files: |
             **/ansible-decryptor-*.tar.gz
             **/ansible-decryptor-*.sha256
