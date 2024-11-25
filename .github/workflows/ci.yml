@@ -1,9 +1,8 @@
 name: Build
 on:
   push:
-    branches:
-      - "**"
-  pull_request:
+    tags:
+      - 'v*'
   workflow_dispatch:
 env:
   RUST_BACKTRACE: 1
@@ -18,41 +17,95 @@ jobs:
     strategy:
       matrix:
         platform:
+          - os-name: FreeBSD-x86_64
+            runs-on: ubuntu-20.04
+            target: x86_64-unknown-freebsd
+            command: build
+            binary-name: ansible-decryptor
+            skip_tests: true
+
           - os-name: Linux-x86_64
             runs-on: ubuntu-20.04
             target: x86_64-unknown-linux-musl
+            command: build
+            binary-name: ansible-decryptor
 
           - os-name: Linux-aarch64
             runs-on: ubuntu-20.04
             target: aarch64-unknown-linux-musl
+            command: build
+            binary-name: ansible-decryptor
 
           - os-name: Linux-riscv64
             runs-on: ubuntu-20.04
             target: riscv64gc-unknown-linux-gnu
+            command: build
+            binary-name: ansible-decryptor
 
           - os-name: Windows-x86_64
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
+            command: build
+            binary-name: ansible-decryptor.exe
 
           - os-name: macOS-x86_64
             runs-on: macOS-latest
             target: x86_64-apple-darwin
-
-          # more targets here ...
+            command: build
+            binary-name: ansible-decryptor
 
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
           command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
-          args: "--release"
+          args: "--locked --release"
           strip: true
-      - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
+
+      - name: Package Binary
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          tar -czf ../../../ansible-decryptor-${{ matrix.platform.os-name }}.tar.gz ${{ matrix.platform.binary-name }}
+          cd -
+
+      - name: Generate SHA256
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          sha256sum ${{ matrix.platform.binary-name }} > ../../../ansible-decryptor-${{ matrix.platform.os-name }}.sha256
+          cd -
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
         with:
-          executable-name: ansible-decryptor
-          target: ${{ matrix.platform.target }}
+          name: ansible-decryptor-${{ matrix.platform.os-name }}
+          path: |
+            ansible-decryptor-${{ matrix.platform.os-name }}.tar.gz
+            ansible-decryptor-${{ matrix.platform.os-name }}.sha256
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            **/ansible-decryptor-*.tar.gz
+            **/ansible-decryptor-*.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: true

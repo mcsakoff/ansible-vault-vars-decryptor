@@ -98,6 +98,50 @@ another_secret:
 ```
 
 
+## Installation
+
+### Download Pre-built Binary
+
+Pre-built binaries are available for multiple platforms in the [Releases](https://github.com/YOUR_USERNAME/ansible-decryptor/releases) section. Choose the appropriate version for your system:
+
+- Linux (x86_64, aarch64, riscv64)
+- macOS (x86_64)
+- Windows (x86_64)
+- FreeBSD (x86_64)
+
+Each release includes:
+- Compressed binary (`.tar.gz`)
+- SHA256 checksums for verification
+
+To install:
+
+1. Download the appropriate binary for your system from the [latest release](https://github.com/YOUR_USERNAME/ansible-decryptor/releases/latest)
+2. Verify the checksum (recommended):
+   ```bash
+   sha256sum -c ansible-decryptor-<platform>.sha256
+   ```
+3. Extract the binary:
+   ```bash
+   tar xzf ansible-decryptor-<platform>.tar.gz
+   ```
+4. Move the binary to a directory in your PATH:
+   ```bash
+   sudo mv ansible-decryptor /usr/local/bin/
+   ```
+
+### Building from Source
+
+If you prefer to build from source, you'll need Rust installed. Then:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/ansible-decryptor.git
+cd ansible-decryptor
+cargo build --release
+```
+
+The binary will be available at `target/release/ansible-decryptor`
+
+
 # Disclaimer
 
 This was written by a mix of LLM and manual tweaks.
