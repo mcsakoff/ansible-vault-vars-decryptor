@@ -117,7 +117,16 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.platform.target }}/release
-          sha256sum ${{ matrix.platform.binary-name }} > ../../../ansible-decryptor-${{ matrix.platform.os-name }}.sha256
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            # Use PowerShell to generate SHA256
+            pwsh -Command "Get-FileHash -Algorithm SHA256 ${{ matrix.platform.binary-name }} | ForEach-Object {$_.Hash.ToLower() + '  ' + '${{ matrix.platform.binary-name }}'}" > ../../../ansible-decryptor-${{ matrix.platform.os-name }}.sha256
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            # Use shasum on macOS
+            shasum -a 256 ${{ matrix.platform.binary-name }} > ../../../ansible-decryptor-${{ matrix.platform.os-name }}.sha256
+          else
+            # Use sha256sum on Linux
+            sha256sum ${{ matrix.platform.binary-name }} > ../../../ansible-decryptor-${{ matrix.platform.os-name }}.sha256
+          fi
           cd -
 
       - name: Upload artifacts
