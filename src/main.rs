@@ -2,8 +2,9 @@ use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
-use tempfile;
+use std::io::Cursor;
+use ansible_vault as vault;
+use std::process;
 
 fn get_vault_password() -> Result<String, String> {
     // First try environment variable
@@ -37,28 +38,12 @@ fn get_vault_password() -> Result<String, String> {
 fn decrypt_data(encrypted_data: &str) -> Result<String, String> {
     let vault_password = get_vault_password()?;
     
-    // Create a temporary file for the vault password
-    let temp_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let pass_file = temp_dir.path().join("vault_pass");
-    fs::write(&pass_file, &vault_password).map_err(|e| e.to_string())?;
-
-    // Create a temporary file for the encrypted data
-    let encrypted_file = temp_dir.path().join("encrypted.txt");
-    fs::write(&encrypted_file, encrypted_data).map_err(|e| e.to_string())?;
-
-    let output = Command::new("ansible-vault")
-        .arg("decrypt")
-        .arg("--vault-password-file")
-        .arg(&pass_file)
-        .arg(&encrypted_file)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        fs::read_to_string(&encrypted_file).map_err(|e| e.to_string())
-    } else {
-        let err_msg = String::from_utf8_lossy(&output.stderr).into_owned();
-        Err(format!("Decryption failed: {}", err_msg))
+    // Use ansible-vault crate to decrypt the data
+    let cursor = Cursor::new(encrypted_data);
+    match vault::decrypt_vault(cursor, &vault_password) {
+        Ok(decrypted_bytes) => String::from_utf8(decrypted_bytes)
+            .map_err(|e| format!("Failed to convert decrypted data to string: {}", e)),
+        Err(e) => Err(format!("Decryption failed: {}", e))
     }
 }
 
@@ -67,18 +52,20 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: {} <vault_file.yml>", args[0]);
-        std::process::exit(1);
+        process::exit(1);
     }
     let filename = &args[1];
 
     // Read the file into a vector of lines
-    let lines = match fs::read_to_string(filename) {
-        Ok(content) => content.lines().map(|s| s.to_string()).collect::<Vec<_>>(),
-        Err(e) => {
+    let lines = fs::read_to_string(filename)
+        .map_err(|e| {
             eprintln!("Failed to read the file: {}", e);
-            std::process::exit(1);
-        }
-    };
+            process::exit(1);
+        })
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
 
     // Regex to match lines with '!vault |', capturing the indentation
     let vault_re = Regex::new(r"^(\s*)(-?\s*.*?:?)?\s*!vault\s*\|").unwrap();
@@ -119,13 +106,12 @@ fn main() {
             }
 
             // Decrypt the encrypted data
-            let decrypted_data = match decrypt_data(&encrypted_data) {
-                Ok(data) => data,
-                Err(err) => {
+            let decrypted_data = decrypt_data(&encrypted_data)
+                .map_err(|err| {
                     eprintln!("Failed to decrypt data: {}", err);
-                    std::process::exit(1);
-                }
-            };
+                    process::exit(1);
+                })
+                .unwrap();
 
             // Indent decrypted data
             let decrypted_lines: Vec<&str> = decrypted_data.lines().collect();
