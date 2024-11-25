@@ -141,6 +141,46 @@ cargo build --release
 
 The binary will be available at `target/release/ansible-decryptor`
 
+## Development Requirements
+
+To run the tests, you'll need:
+1. Rust toolchain (cargo, rustc)
+2. Python and ansible-vault:
+   ```bash
+   # Install ansible-vault (Ubuntu/Debian)
+   sudo apt-get install ansible
+
+   # Or with pip
+   pip install ansible-core
+   ```
+
+## Testing
+
+The project includes integration tests that verify the decryption functionality. To run the tests:
+
+```bash
+# Run all tests
+cargo test
+
+# Run with output (including println! statements)
+cargo test -- --nocapture
+
+# Run a specific test
+cargo test test_decrypt_all_yml
+
+# Run tests with logging
+RUST_BACKTRACE=1 cargo test
+```
+
+The tests verify:
+- Decryption of single and multiple vault variables
+- Handling of invalid vault passwords
+- Error cases (nonexistent files)
+- Preservation of non-vault content
+
+Test fixtures are located in `tests/fixtures/`:
+- `all.yml`: Example YAML with encrypted vault variables
+- `vault_pass.txt`: Test vault password file
 
 # Disclaimer
 

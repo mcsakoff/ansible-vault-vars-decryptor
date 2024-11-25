@@ -1,37 +1,61 @@
 use regex::Regex;
 use std::env;
 use std::fs;
-use std::io::{Write};
-use std::process::{Command, Stdio};
+use std::path::Path;
+use std::process::Command;
+use tempfile;
 
-fn decrypt_data(encrypted_data: &str) -> Result<String, String> {
-    let mut cmd = Command::new("ansible-vault")
-        .arg("decrypt")
-        .arg("--output=-")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-
-    // Write the encrypted data to the stdin of the process
-    if let Some(ref mut stdin) = cmd.stdin {
-        stdin
-            .write_all(encrypted_data.as_bytes())
-            .map_err(|e| e.to_string())?;
-    } else {
-        return Err("Failed to open stdin".to_string());
+fn get_vault_password() -> Result<String, String> {
+    // First try environment variable
+    if let Ok(password) = env::var("ANSIBLE_VAULT_PASSWORD") {
+        return Ok(password);
     }
 
-    // Read the decrypted data from stdout
-    let output = cmd.wait_with_output().map_err(|e| e.to_string())?;
+    // Then try password file from environment variable
+    if let Ok(password_file) = env::var("ANSIBLE_VAULT_PASSWORD_FILE") {
+        return fs::read_to_string(password_file)
+            .map(|s| s.trim().to_string())
+            .map_err(|e| format!("Failed to read vault password file: {}", e));
+    }
+
+    // Finally try default password file location
+    let home = env::var("HOME").map_err(|_| "HOME environment variable not set".to_string())?;
+    let default_password_file = Path::new(&home).join(".vault_pass");
+    
+    if default_password_file.exists() {
+        return fs::read_to_string(default_password_file)
+            .map(|s| s.trim().to_string())
+            .map_err(|e| format!("Failed to read default vault password file: {}", e));
+    }
+
+    Err("No vault password found. Set ANSIBLE_VAULT_PASSWORD environment variable or create a password file".to_string())
+}
+
+fn decrypt_data(encrypted_data: &str) -> Result<String, String> {
+    let vault_password = get_vault_password()?;
+    
+    // Create a temporary file for the vault password
+    let temp_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let pass_file = temp_dir.path().join("vault_pass");
+    fs::write(&pass_file, &vault_password).map_err(|e| e.to_string())?;
+
+    // Create a temporary file for the encrypted data
+    let encrypted_file = temp_dir.path().join("encrypted.txt");
+    fs::write(&encrypted_file, encrypted_data).map_err(|e| e.to_string())?;
+
+    let output = Command::new("ansible-vault")
+        .arg("decrypt")
+        .arg("--vault-password-file")
+        .arg(&pass_file)
+        .arg(&encrypted_file)
+        .output()
+        .map_err(|e| e.to_string())?;
 
     if output.status.success() {
-        let decrypted = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
-        Ok(decrypted)
+        fs::read_to_string(&encrypted_file).map_err(|e| e.to_string())
     } else {
         let err_msg = String::from_utf8_lossy(&output.stderr).into_owned();
-        Err(err_msg)
+        Err(format!("Decryption failed: {}", err_msg))
     }
 }
 
@@ -121,4 +145,3 @@ fn main() {
         println!("{}", line);
     }
 }
-
