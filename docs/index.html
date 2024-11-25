@@ -54,6 +54,10 @@
         <p>Ansible Decryptor is a powerful tool designed to help you decrypt Ansible vault files with ease. It's perfect for developers and system administrators who need a straightforward way to access encrypted data.</p>
         <h3>Download Instructions</h3>
         <div class="download">
+            <div style="background-color: #fff3cd; color: #856404; padding: 1em; margin: 1em 0; border-radius: 5px; border: 1px solid #ffeeba;">
+                <strong>⚠️ Important:</strong> This tool requires <code>ansible-vault</code> to be installed and available in your PATH. 
+                Please ensure you have Ansible installed before using this tool.
+            </div>
             <p>To download the latest version of Ansible Decryptor, visit our <a href="https://github.com/chrisjsimpson/ansible-vault-vars-decryptor/releases/latest">GitHub Releases</a> page and select the appropriate binary for your operating system.</p>
             <ul>
                 <li><a href="https://github.com/chrisjsimpson/ansible-vault-vars-decryptor/releases/latest/download/ansible-decryptor-Linux-x86_64.tar.gz">Download for Linux</a></li>
@@ -64,12 +68,21 @@
         <h3>Build Status</h3>
         <img src="https://github.com/chrisjsimpson/ansible-vault-vars-decryptor/actions/workflows/ci.yml/badge.svg" alt="Build Status">
         <h3>Getting Started</h3>
-        <p>After downloading, extract the binary and add it to your PATH to start decrypting vault files immediately.</p>
-        <pre><code>tar -xzf ansible-decryptor-Linux-x86_64.tar.gz
-./ansible-decryptor --help</code></pre>
+        <div style="background-color: #e8f4f8; padding: 1em; margin: 1em 0; border-radius: 5px;">
+            <p>1. Extract the binary:</p>
+            <pre><code>tar -xzf ansible-decryptor-Linux-x86_64.tar.gz</code></pre>
+            <p>2. Set your vault password (choose one method):</p>
+            <pre><code># Method 1: Use environment variable
+export ANSIBLE_VAULT_PASSWORD=your_password
+
+# Method 2: Use password file
+echo "your_password" > ~/.vault_pass
+# or
+export ANSIBLE_VAULT_PASSWORD_FILE=path/to/your/vault_password_file</code></pre>
+            <p>3. Run the decryptor:</p>
+            <pre><code>./ansible-decryptor path/to/your/encrypted_vars.yml</code></pre>
+        </div>
     </div>
-    <div class="footer">
-        <p>&copy; 2023 Ansible Decryptor. All rights reserved.</p>
-    </div>
+
 </body>
 </html>
