@@ -1,20 +1,21 @@
 use ansible_vault as vault;
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
+use is_executable::IsExecutable;
 use log::{debug, error};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::env;
 use std::fs::{self, File};
 use std::io::{stdin, BufRead, BufReader, Cursor, Error};
 use std::path::{Path, PathBuf};
-use once_cell::sync::Lazy;
 use std::process;
 
 static VAULT_PASSWORD: Lazy<String> = Lazy::new(|| {
     match get_vault_password() {
         Ok(password) => password,
         Err(e) => {
-            error!("Error: {}", e);
+            error!("Error: {e}");
             process::exit(1);
         }
     }
@@ -28,10 +29,26 @@ struct Args {
 }
 
 fn get_password_from_file(path: PathBuf) -> Result<String> {
-    debug!("Attempting to read file: {}", path.display());
-    // TODO: is the file is executable, we must run it and get the output
-    fs::read_to_string(path)
-        .or_else(|e| Err(anyhow!("Failed to read vault password file: {}", e)))
+    if path.is_executable() {
+        debug!("Attempting to execute file: {}", path.display());
+        let res = process::Command::new(path).output()?;
+        if !res.status.success() {
+            for err_line in res.stderr.lines() {
+                error!("{}", err_line?)
+            }
+            bail!("Failed to execute vault password file: {}", res.status)
+        }
+        match res.stdout.lines().next() {
+            None => bail!("Vault password is empty"),
+            Some(password) => password
+                .or_else(|e| Err(anyhow!("Failed to read vault password: {e}")))
+        }
+
+    } else {
+        debug!("Attempting to read file: {}", path.display());
+        fs::read_to_string(path)
+            .or_else(|e| Err(anyhow!("Failed to read vault password file: {e}")))
+    }
 }
 
 fn get_vault_password() -> Result<String> {
@@ -50,6 +67,8 @@ fn get_vault_password() -> Result<String> {
     } else {
         debug!("ANSIBLE_VAULT_PASSWORD_FILE variable not found");
     };
+
+    // TODO: Add support for ANSIBLE_VAULT_IDENTITY_LIST
 
     // Finally try default password file location
     debug!("Attempting to get vault password from default location ~/.vault_pass.");
@@ -101,7 +120,7 @@ fn main() -> Result<()> {
     let lines = match read_file_or_stdout(args.file) {
         Ok(lines) => lines,
         Err(err) => {
-            error!("{}", err);
+            error!("{err}");
             process::exit(1);
         }
     };
@@ -142,7 +161,7 @@ fn main() -> Result<()> {
             let decrypted_data = match decrypt_data(&encrypted_data) {
                 Ok(decrypted_data) => decrypted_data,
                 Err(err) => {
-                    error!("{}", err);
+                    error!("{err}");
                     process::exit(1);
                 },
             };
@@ -161,9 +180,9 @@ fn main() -> Result<()> {
                     // TODO: use the same indentation as the original file
                     let encrypted_line_indent = " ".repeat(base_indent + 2); // Increase indent for decrypted lines
 
-                    output_lines.push(format!("{} |", pre_vault_text));
+                    output_lines.push(format!("{pre_vault_text} |"));
                     for decrypted_line in decrypted_lines {
-                        let indented_line = format!("{}{}", encrypted_line_indent, decrypted_line);
+                        let indented_line = format!("{encrypted_line_indent}{decrypted_line}");
                         output_lines.push(indented_line);
                     }
                 }
