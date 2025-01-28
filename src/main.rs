@@ -1,10 +1,19 @@
+use anyhow::{bail, Result};
+use ansible_vault as vault;
+use clap::Parser;
 use regex::Regex;
 use std::env;
-use std::fs;
-use std::path::Path;
-use std::io::Cursor;
-use ansible_vault as vault;
-use std::process;
+use std::fs::{self, File};
+use std::io::{stdin, BufRead, BufReader, Cursor, Error};
+use std::path::{Path, PathBuf};
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// YAML file with vaulted values
+    file: Option<PathBuf>,
+}
+
 
 fn get_vault_password() -> Result<String, String> {
     // First try environment variable
@@ -25,7 +34,7 @@ fn get_vault_password() -> Result<String, String> {
     println!("Attempting to get vault password from default location ~/.vault_pass.");
     let home = env::var("HOME").map_err(|_| "HOME environment variable not set".to_string())?;
     let default_password_file = Path::new(&home).join(".vault_pass");
-    
+
     if default_password_file.exists() {
         return fs::read_to_string(default_password_file)
             .map(|s| s.trim().to_string())
@@ -37,7 +46,7 @@ fn get_vault_password() -> Result<String, String> {
 
 fn decrypt_data(encrypted_data: &str) -> Result<String, String> {
     let vault_password = get_vault_password()?;
-    
+
     // Use ansible-vault crate to decrypt the data
     let cursor = Cursor::new(encrypted_data);
     match vault::decrypt_vault(cursor, &vault_password) {
@@ -47,25 +56,22 @@ fn decrypt_data(encrypted_data: &str) -> Result<String, String> {
     }
 }
 
-fn main() {
-    // Ensure a filename is provided as an argument
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: {} <vault_file.yml>", args[0]);
-        process::exit(1);
-    }
-    let filename = &args[1];
-
-    // Read the file into a vector of lines
-    let lines = fs::read_to_string(filename)
-        .map_err(|e| {
-            eprintln!("Failed to read the file: {}", e);
-            process::exit(1);
-        })
-        .unwrap()
+fn read_file_or_stdout(path: Option<PathBuf>) -> Result<Vec<String>, Error> {
+    let file: Box<dyn BufRead> = match path {
+        None => Box::new(BufReader::new(stdin())),
+        Some(path) => Box::new(BufReader::new(File::open(path)?))
+    };
+    file
         .lines()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<String>, Error>>()
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+    let lines = match read_file_or_stdout(args.file) {
+        Ok(lines) => lines,
+        Err(err) => bail!(err)
+    };
 
     // Regex to match lines with '!vault |', capturing the indentation
     let vault_re = Regex::new(r"^(\s*)(-?\s*.*?:?)?\s*!vault\s*\|").unwrap();
@@ -106,12 +112,10 @@ fn main() {
             }
 
             // Decrypt the encrypted data
-            let decrypted_data = decrypt_data(&encrypted_data)
-                .map_err(|err| {
-                    eprintln!("Failed to decrypt data: {}", err);
-                    process::exit(1);
-                })
-                .unwrap();
+            let decrypted_data = match decrypt_data(&encrypted_data) {
+                Ok(decrypted_data) => decrypted_data,
+                Err(err) => bail!(err),
+            };
 
             // Indent decrypted data
             let decrypted_lines: Vec<&str> = decrypted_data.lines().collect();
@@ -133,4 +137,5 @@ fn main() {
     for line in output_lines {
         println!("{}", line);
     }
+    Ok(())
 }
