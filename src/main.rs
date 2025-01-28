@@ -11,9 +11,9 @@ use std::io::{stdin, BufRead, BufReader, Cursor, Error};
 use std::path::{Path, PathBuf};
 use std::process;
 
-static VAULT_PASSWORD: Lazy<String> = Lazy::new(|| {
-    match get_vault_password() {
-        Ok(password) => password,
+static VAULT_PASSWORDS: Lazy<Vec<String>> = Lazy::new(|| {
+    match get_vault_passwords() {
+        Ok(passwords) => passwords,
         Err(e) => {
             error!("Error: {e}");
             process::exit(1);
@@ -43,7 +43,6 @@ fn get_password_from_file(path: PathBuf) -> Result<String> {
             Some(password) => password
                 .or_else(|e| Err(anyhow!("Failed to read vault password: {e}")))
         }
-
     } else {
         debug!("Attempting to read file: {}", path.display());
         fs::read_to_string(path)
@@ -51,51 +50,82 @@ fn get_password_from_file(path: PathBuf) -> Result<String> {
     }
 }
 
-fn get_vault_password() -> Result<String> {
+fn get_vault_passwords() -> Result<Vec<String>> {
+    let mut passwords = Vec::new();
+
+    // TODO: Read ansible.cfg from ANSIBLE_CONFIG or default one.
+
     // First try environment variable
-    debug!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD.");
     if let Ok(password) = env::var("ANSIBLE_VAULT_PASSWORD") {
-        return Ok(password);
+        debug!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD");
+        passwords.push(password);
     } else {
         debug!("ANSIBLE_VAULT_PASSWORD variable not found");
     }
 
     // Then try password file from environment variable
-    debug!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD_FILE.");
-    if let Ok(password_file) = env::var("ANSIBLE_VAULT_PASSWORD_FILE") {
-        return get_password_from_file(password_file.into())
-    } else {
-        debug!("ANSIBLE_VAULT_PASSWORD_FILE variable not found");
-    };
-
-    // TODO: Add support for ANSIBLE_VAULT_IDENTITY_LIST
-
-    // Finally try default password file location
-    debug!("Attempting to get vault password from default location ~/.vault_pass.");
-    if let Ok(home) = env::var("HOME") {
-        let default_password_file = Path::new(&home).join(".vault_pass");
-        if default_password_file.exists() {
-            return get_password_from_file(default_password_file)
-        } else {
-            debug!("Default password file not found");
+    let password_file = match env::var("ANSIBLE_VAULT_PASSWORD_FILE") {
+        Ok(password_file) => {
+            debug!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD_FILE");
+            Some(password_file)
         }
-    } else {
-        debug!("HOME environment variable not set");
+        Err(_) => {
+            debug!("ANSIBLE_VAULT_PASSWORD_FILE variable not found");
+            // Try default password file location
+            if let Ok(home) = env::var("HOME") {
+                let default_password_file = Path::new(&home).join(".vault_pass");
+                if default_password_file.exists() {
+                    debug!("Attempting to get vault password from default location ~/.vault_pass");
+                    if let Some(password_file) = default_password_file.to_str() {
+                        Some(password_file.to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    debug!("Default password file not found");
+                    None
+                }
+            } else {
+                debug!("HOME environment variable not set");
+                None
+            }
+        }
+    };
+    if let Some(password_file) = password_file {
+        let password = get_password_from_file(password_file.into())?;
+        passwords.push(password);
     }
 
-    bail!("No vault password found. Set ANSIBLE_VAULT_PASSWORD environment variable or create a password file")
+    // Finally try password files from identity list
+    if let Ok(identity_list) = env::var("ANSIBLE_VAULT_IDENTITY_LIST") {
+        debug!("Attempting to get vault passwords from environment variable ANSIBLE_VAULT_IDENTITY_LIST");
+        for identity in identity_list.split(",") {
+            if let Some((identity, password_file)) = identity.trim().split_once("@") {
+                if identity.is_empty() { continue; }
+                if let Ok(password) = get_password_from_file(password_file.into()) {
+                    passwords.push(password);
+                }
+            }
+        }
+    } else {
+        debug!("ANSIBLE_VAULT_IDENTITY_LIST variable not found");
+    }
+
+    if passwords.is_empty() {
+        bail!("No vault password found. Set ANSIBLE_VAULT_PASSWORD environment variable or create a password file")
+    }
+    Ok(passwords)
 }
 
 fn decrypt_data(encrypted_data: &str) -> Result<String> {
-    let vault_password = VAULT_PASSWORD.as_str();
-
-    // Use ansible-vault crate to decrypt the data
-    let cursor = Cursor::new(encrypted_data);
-    let data = match vault::decrypt_vault(cursor, vault_password) {
-        Ok(decrypted_bytes) => String::from_utf8(decrypted_bytes)?,
-        Err(e) => bail!("Decryption failed: {}", e)
-    };
-    Ok(data)
+    for vault_password in VAULT_PASSWORDS.iter() {
+        // Use ansible-vault crate to decrypt the data
+        let cursor = Cursor::new(encrypted_data);
+        if let Ok(decrypted_bytes) = vault::decrypt_vault(cursor, vault_password) {
+            return Ok(String::from_utf8(decrypted_bytes)?);
+        }
+    }
+    bail!("Decryption failed: No matching vault password found")
 }
 
 fn read_file_or_stdout(path: Option<PathBuf>) -> Result<Vec<String>> {
@@ -135,7 +165,7 @@ fn main() -> Result<()> {
         let line = &lines[i];
 
         if let Some(caps) = vault_re.captures(line) {
-            let pre_vault_text= caps.get(1).unwrap().as_str();
+            let pre_vault_text = caps.get(1).unwrap().as_str();
             let base_indent = caps.get(2).unwrap().as_str().len();
             let mut encrypted_data = String::new();
 
@@ -163,7 +193,7 @@ fn main() -> Result<()> {
                 Err(err) => {
                     error!("{err}");
                     process::exit(1);
-                },
+                }
             };
 
             // Indent decrypted data
