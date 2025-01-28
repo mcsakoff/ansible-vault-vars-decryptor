@@ -107,7 +107,7 @@ fn main() -> Result<()> {
     };
 
     // Regex to match lines with '!vault |', capturing the indentation
-    let vault_re = Regex::new(r"^(\s*)(-?\s*.*?:?)?\s*!vault\s*\|")?;
+    let vault_re = Regex::new(r"^((\s*)-?\s*.*?:?)\s*!vault\s*\|")?;
 
     let mut output_lines = Vec::new();
     let mut i = 0;
@@ -116,23 +116,17 @@ fn main() -> Result<()> {
         let line = &lines[i];
 
         if let Some(caps) = vault_re.captures(line) {
-            let base_indent = caps.get(1).unwrap().as_str().len();
+            let pre_vault_text= caps.get(1).unwrap().as_str();
+            let base_indent = caps.get(2).unwrap().as_str().len();
             let mut encrypted_data = String::new();
-
-            output_lines.push(line.clone()); // Keep the '!vault |' line
 
             i += 1;
             // Collect encrypted data lines
             while i < lines.len() {
                 let next_line = &lines[i];
                 let next_line_indent = next_line.chars().take_while(|c| c.is_whitespace()).count();
-
-                if next_line.trim().is_empty() {
-                    output_lines.push(next_line.clone());
-                    i += 1;
-                    continue;
-                }
-
+                // TODO: count tabs correctly. It may require scanning the file for first indentation
+                //       to find out how many space symbols are used for one level of indentation.
                 if next_line_indent > base_indent {
                     // Remove base indentation and collect encrypted data
                     let data_line = &next_line[base_indent..];
@@ -155,13 +149,24 @@ fn main() -> Result<()> {
 
             // Indent decrypted data
             let decrypted_lines: Vec<&str> = decrypted_data.lines().collect();
-            let encrypted_line_indent = " ".repeat(base_indent + 2); // Increase indent for decrypted lines
+            match decrypted_lines.len() {
+                0 => {
+                    output_lines.push(format!("{pre_vault_text} ''"));
+                }
+                1 => {
+                    let decrypted_line = decrypted_lines[0];
+                    output_lines.push(format!("{pre_vault_text} {decrypted_line}"));
+                }
+                _ => {
+                    // TODO: use the same indentation as the original file
+                    let encrypted_line_indent = " ".repeat(base_indent + 2); // Increase indent for decrypted lines
 
-            output_lines.push(format!("{}|", encrypted_line_indent.trim_end()));
-
-            for decrypted_line in decrypted_lines {
-                let indented_line = format!("{}{}", encrypted_line_indent, decrypted_line);
-                output_lines.push(indented_line);
+                    output_lines.push(format!("{} |", pre_vault_text));
+                    for decrypted_line in decrypted_lines {
+                        let indented_line = format!("{}{}", encrypted_line_indent, decrypted_line);
+                        output_lines.push(indented_line);
+                    }
+                }
             }
         } else {
             output_lines.push(line.clone());
