@@ -1,6 +1,7 @@
-use anyhow::{bail, Result};
 use ansible_vault as vault;
+use anyhow::{anyhow, bail, Result};
 use clap::Parser;
+use log::debug;
 use regex::Regex;
 use std::env;
 use std::fs::{self, File};
@@ -14,59 +15,75 @@ struct Args {
     file: Option<PathBuf>,
 }
 
+fn get_password_from_file(path: PathBuf) -> Result<String> {
+    debug!("Attempting to read file: {}", path.display());
+    fs::read_to_string(path)
+        .or_else(|e| Err(anyhow!("Failed to read vault password file: {}", e)))
+}
 
-fn get_vault_password() -> Result<String, String> {
+fn get_vault_password() -> Result<String> {
     // First try environment variable
-    println!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD.");
+    debug!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD.");
     if let Ok(password) = env::var("ANSIBLE_VAULT_PASSWORD") {
         return Ok(password);
+    } else {
+        debug!("ANSIBLE_VAULT_PASSWORD variable not found");
     }
 
     // Then try password file from environment variable
-    println!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD_FILE.");
+    debug!("Attempting to get vault password from environment variable ANSIBLE_VAULT_PASSWORD_FILE.");
     if let Ok(password_file) = env::var("ANSIBLE_VAULT_PASSWORD_FILE") {
-        return fs::read_to_string(password_file)
-            .map(|s| s.trim().to_string())
-            .map_err(|e| format!("Failed to read vault password file: {}", e));
-    }
+        return get_password_from_file(password_file.into())
+    } else {
+        debug!("ANSIBLE_VAULT_PASSWORD_FILE variable not found");
+    };
 
     // Finally try default password file location
-    println!("Attempting to get vault password from default location ~/.vault_pass.");
-    let home = env::var("HOME").map_err(|_| "HOME environment variable not set".to_string())?;
-    let default_password_file = Path::new(&home).join(".vault_pass");
-
-    if default_password_file.exists() {
-        return fs::read_to_string(default_password_file)
-            .map(|s| s.trim().to_string())
-            .map_err(|e| format!("Failed to read default vault password file: {}", e));
+    debug!("Attempting to get vault password from default location ~/.vault_pass.");
+    if let Ok(home) = env::var("HOME") {
+        let default_password_file = Path::new(&home).join(".vault_pass");
+        if default_password_file.exists() {
+            return get_password_from_file(default_password_file)
+        } else {
+            debug!("Default password file not found");
+        }
+    } else {
+        debug!("HOME environment variable not set");
     }
 
-    Err("No vault password found. Set ANSIBLE_VAULT_PASSWORD environment variable or create a password file".to_string())
+    bail!("No vault password found. Set ANSIBLE_VAULT_PASSWORD environment variable or create a password file")
 }
 
-fn decrypt_data(encrypted_data: &str) -> Result<String, String> {
+fn decrypt_data(encrypted_data: &str) -> Result<String> {
     let vault_password = get_vault_password()?;
 
     // Use ansible-vault crate to decrypt the data
     let cursor = Cursor::new(encrypted_data);
-    match vault::decrypt_vault(cursor, &vault_password) {
-        Ok(decrypted_bytes) => String::from_utf8(decrypted_bytes)
-            .map_err(|e| format!("Failed to convert decrypted data to string: {}", e)),
-        Err(e) => Err(format!("Decryption failed: {}", e))
-    }
+    let data = match vault::decrypt_vault(cursor, &vault_password) {
+        Ok(decrypted_bytes) => String::from_utf8(decrypted_bytes)?,
+        Err(e) => bail!("Decryption failed: {}", e)
+    };
+    Ok(data)
 }
 
-fn read_file_or_stdout(path: Option<PathBuf>) -> Result<Vec<String>, Error> {
+fn read_file_or_stdout(path: Option<PathBuf>) -> Result<Vec<String>> {
     let file: Box<dyn BufRead> = match path {
         None => Box::new(BufReader::new(stdin())),
         Some(path) => Box::new(BufReader::new(File::open(path)?))
     };
-    file
+    let data = file
         .lines()
-        .collect::<Result<Vec<String>, Error>>()
+        .collect::<Result<Vec<String>, Error>>()?;
+    Ok(data)
 }
 
 fn main() -> Result<()> {
+    env_logger::init_from_env(
+        env_logger::Env::default()
+            .filter_or("LOG_LEVEL", "info")
+            .write_style_or("LOG_STYLE", "always")
+    );
+
     let args = Args::parse();
     let lines = match read_file_or_stdout(args.file) {
         Ok(lines) => lines,
