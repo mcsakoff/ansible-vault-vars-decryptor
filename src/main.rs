@@ -1,12 +1,24 @@
 use ansible_vault as vault;
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
-use log::debug;
+use log::{debug, error};
 use regex::Regex;
 use std::env;
 use std::fs::{self, File};
 use std::io::{stdin, BufRead, BufReader, Cursor, Error};
 use std::path::{Path, PathBuf};
+use once_cell::sync::Lazy;
+use std::process;
+
+static VAULT_PASSWORD: Lazy<String> = Lazy::new(|| {
+    match get_vault_password() {
+        Ok(password) => password,
+        Err(e) => {
+            error!("Error: {}", e);
+            process::exit(1);
+        }
+    }
+});
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -17,6 +29,7 @@ struct Args {
 
 fn get_password_from_file(path: PathBuf) -> Result<String> {
     debug!("Attempting to read file: {}", path.display());
+    // TODO: is the file is executable, we must run it and get the output
     fs::read_to_string(path)
         .or_else(|e| Err(anyhow!("Failed to read vault password file: {}", e)))
 }
@@ -55,11 +68,11 @@ fn get_vault_password() -> Result<String> {
 }
 
 fn decrypt_data(encrypted_data: &str) -> Result<String> {
-    let vault_password = get_vault_password()?;
+    let vault_password = VAULT_PASSWORD.as_str();
 
     // Use ansible-vault crate to decrypt the data
     let cursor = Cursor::new(encrypted_data);
-    let data = match vault::decrypt_vault(cursor, &vault_password) {
+    let data = match vault::decrypt_vault(cursor, vault_password) {
         Ok(decrypted_bytes) => String::from_utf8(decrypted_bytes)?,
         Err(e) => bail!("Decryption failed: {}", e)
     };
@@ -87,11 +100,14 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let lines = match read_file_or_stdout(args.file) {
         Ok(lines) => lines,
-        Err(err) => bail!(err)
+        Err(err) => {
+            error!("{}", err);
+            process::exit(1);
+        }
     };
 
     // Regex to match lines with '!vault |', capturing the indentation
-    let vault_re = Regex::new(r"^(\s*)(-?\s*.*?:?)?\s*!vault\s*\|").unwrap();
+    let vault_re = Regex::new(r"^(\s*)(-?\s*.*?:?)?\s*!vault\s*\|")?;
 
     let mut output_lines = Vec::new();
     let mut i = 0;
@@ -131,7 +147,10 @@ fn main() -> Result<()> {
             // Decrypt the encrypted data
             let decrypted_data = match decrypt_data(&encrypted_data) {
                 Ok(decrypted_data) => decrypted_data,
-                Err(err) => bail!(err),
+                Err(err) => {
+                    error!("{}", err);
+                    process::exit(1);
+                },
             };
 
             // Indent decrypted data

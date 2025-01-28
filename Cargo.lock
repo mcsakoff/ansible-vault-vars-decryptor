@@ -53,6 +53,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
+ "once_cell",
  "predicates",
  "regex",
  "tempfile",
